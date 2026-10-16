@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScanZ</title>
+  <link rel="icon" href="{{ url_for('static', filename='logo.svg') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.12/dist/face-api.js"></script>
+</head>
+<body>
+  <!-- scattered stars (drawn once by stars.js) -->
+  <canvas id="stars-a" class="stars"></canvas>
+  <canvas id="stars-b" class="stars stars-b"></canvas>
+
+  <div class="app">
+    <!-- ============ HEAD ============ -->
+    <header class="head">
+      <div class="brand">
+        <img class="logo" src="{{ url_for('static', filename='logo.svg') }}" alt="ScanZ logo">
+        <h1>Scan<span>Z</span></h1>
+      </div>
+      <p id="status" class="chip">Click "Start camera" to begin.</p>
+    </header>
+
+    <!-- ============ TC: table of contents / mode switch ============ -->
+    <nav class="toc" id="mode-switch" data-mode="hand">
+      <h2 class="toc-title">Contents</h2>
+      <button id="mode-hand" class="toc-item active">
+        <span class="toc-num">01</span>
+        <span class="toc-text"><b>Hand gestures</b><small>Teach and recognise</small></span>
+      </button>
+      <button id="mode-face" class="toc-item">
+        <span class="toc-num">02</span>
+        <span class="toc-text"><b>Face analysis</b><small>Age, sex, emotion, scans</small></span>
+      </button>
+      <p class="toc-foot">Pick what you want to analyse. Only the selected mode runs, which keeps the camera smooth.</p>
+    </nav>
+
+    <!-- ============ CAM ============ -->
+    <section class="stage">
+      <div class="cam-frame">
+        <div class="video-wrap" id="video-wrap">
+          <video id="video" autoplay playsinline muted></video>
+          <canvas id="overlay"></canvas>
+
+          <span class="hud-c tl"></span><span class="hud-c tr"></span>
+          <span class="hud-c bl"></span><span class="hud-c br"></span>
+          <div class="live-tag"><i></i>LIVE</div>
+          <div class="mode-tag" id="hud-mode">HAND TRACKING</div>
+          <div id="banner" class="banner hidden"></div>
+
+          <div class="start-overlay" id="start-overlay">
+            <button id="start-btn" class="primary">Start camera</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ OPS: readings and options ============ -->
+    <aside class="panel">
+      <!-- HAND GESTURES -->
+      <div id="panel-hand">
+        <div class="card">
+          <h2>Live gesture</h2>
+          <div id="gesture-label" class="big">-</div>
+          <div class="meter"><div id="gesture-conf"></div></div>
+          <label class="switch">
+            <input type="checkbox" id="speak"><span class="slider"></span>
+            <span class="switch-label">Speak it out loud</span>
+          </label>
+        </div>
+
+        <div class="card">
+          <h2>Teach a gesture</h2>
+          <input id="label-input" placeholder="What does it mean? e.g. Hello" maxlength="40">
+          <button id="record-btn" class="primary full" disabled>Record 60 samples</button>
+          <p class="hint">Click, get your hand(s) in view (3 second countdown), then move slightly while it records. Show both hands for a two-hand gesture.</p>
+          <ul id="gesture-list"></ul>
+          <button id="reset-btn" class="danger">Delete all gestures</button>
+        </div>
+      </div>
+
+      <!-- FACE ANALYSIS -->
+      <div id="panel-face" class="hidden">
+        <div class="card">
+          <h2>Overlays</h2>
+          <label class="switch">
+            <input type="checkbox" id="tg-eyes"><span class="slider"></span>
+            <span class="switch-label">Eye tracker <small>highlight + scanner</small></span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="tg-scan"><span class="slider"></span>
+            <span class="switch-label">Face scan <small>laser sweep</small></span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="tg-3d"><span class="slider"></span>
+            <span class="switch-label">3D face map <small>mesh + 3D viewer</small></span>
+          </label>
+        </div>
+
+        <div class="card">
+          <h2>Estimated age</h2>
+          <div class="age-row">
+            <span id="face-age" class="huge">-</span>
+            <span id="face-age-range" class="muted"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Estimated sex</h2>
+          <div id="face-sex" class="big">-</div>
+          <div class="meter"><div id="face-sex-bar"></div></div>
+        </div>
+
+        <div class="card">
+          <h2>Emotion</h2>
+          <div id="face-emotion" class="big">-</div>
+          <div id="emotion-bars"></div>
+          <p class="hint">Rough machine estimates only, not facts about a person. Nothing leaves your computer.</p>
+        </div>
+
+        <div class="card hidden" id="card-eyes">
+          <h2>Eye tracker</h2>
+          <div class="eye-row">
+            <div class="gaze-pad"><i id="gaze-dot"></i></div>
+            <div class="eye-stats">
+              <div><span class="muted">Gaze</span><strong id="eye-gaze">-</strong></div>
+              <div><span class="muted">Blinks</span><strong id="eye-blinks">0</strong></div>
+              <div><span class="muted">Eyes open</span><strong id="eye-open">-</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card hidden" id="card-3d">
+          <h2>3D face map</h2>
+          <canvas id="viewer3d" width="640" height="640"></canvas>
+          <p class="hint">478 live landmarks. Drag to rotate, double-click to reset.</p>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="{{ url_for('static', filename='stars.js') }}"></script>
+  <script type="module" src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
